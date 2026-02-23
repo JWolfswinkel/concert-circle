@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import ConcertCard from '@/components/concerts/ConcertCard'
@@ -18,12 +19,30 @@ interface Props { userId: string; displayName: string }
 
 export default function DashboardClient({ userId, displayName }: Props) {
   const supabase = createClient()
+  const router   = useRouter()
 
   const [upcoming,        setUpcoming]        = useState<Concert[]>([])
   const [userConcerts,    setUserConcerts]    = useState<UserConcert[]>([])
   const [friendSignsMap,  setFriendSignsMap]  = useState<Record<string, FriendSign[]>>({})
   const [showForm,        setShowForm]        = useState(false)
   const [loading,         setLoading]         = useState(true)
+  const [confirmDelete,   setConfirmDelete]   = useState(false)
+  const [deleting,        setDeleting]        = useState(false)
+  const [deleteError,     setDeleteError]     = useState<string | null>(null)
+
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    setDeleteError(null)
+    const res = await fetch('/api/delete-account', { method: 'DELETE' })
+    if (!res.ok) {
+      const body = await res.json()
+      setDeleteError(body.error ?? 'Something went wrong.')
+      setDeleting(false)
+      return
+    }
+    await supabase.auth.signOut()
+    router.push('/')
+  }
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -160,6 +179,47 @@ export default function DashboardClient({ userId, displayName }: Props) {
         <QuickLink href="/friends" emoji="👥" label="Manage friends" desc="Invite friends and accept requests" />
         <QuickLink href="/feed"    emoji="📡" label="Friend feed"    desc="See concerts friends are going to" />
         <QuickLink href="/notifications" emoji="🔔" label="Notifications" desc="Concert matches and friend requests" />
+      </section>
+
+      {/* Danger zone */}
+      <section className="border border-red-200 rounded-xl p-5 space-y-3">
+        <h2 className="font-semibold text-red-700 text-sm">Danger zone</h2>
+        {!confirmDelete ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Permanently delete your account, concert statuses, and friend connections.
+            </p>
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="ml-4 shrink-0 text-sm text-red-600 hover:text-red-700 font-medium"
+            >
+              Delete account
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700 font-medium">
+              Are you sure? This cannot be undone.
+            </p>
+            {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="btn-primary bg-red-600 hover:bg-red-700 focus:ring-red-500 text-sm"
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete my account'}
+              </button>
+              <button
+                onClick={() => { setConfirmDelete(false); setDeleteError(null) }}
+                disabled={deleting}
+                className="btn-secondary text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )
